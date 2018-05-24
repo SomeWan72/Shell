@@ -19,8 +19,6 @@ To compile and run the program:
 
 #define MAX_LINE 256 /* 256 chars per line, per command, should be enough. */
 
-job* list;
-
 void cd(char *args[])
 {
     if(args[1] == NULL)
@@ -46,46 +44,8 @@ void cd(char *args[])
             printf("ERROR, directory %s not found.\n", args[1]);
         }
     }
-}
 
-void handler ()
-{
-    enum status status_res;
-    int exStat, info, hasToBeDeleted;
-    pid_t pid_aux;
-    job* plist = list->next;
 
-    while(plist != NULL)
-    {
-        hasToBeDeleted = 0;
-        pid_aux = waitpid(plist->pgid, &exStat, WNOHANG | WUNTRACED);
-
-        if(pid_aux == plist->pgid)
-        {
-            status_res = analyze_status(exStat, &info);
-
-            if(status_res != SUSPENDED)
-            {
-                hasToBeDeleted = 1;
-                printf("The process %d has finished successfully.\n", plist->pgid);
-            } else
-            {
-                printf("The process %d is suspended.\n", plist->pgid);
-                plist->state = STOPPED;
-            }
-
-        }
-
-        if(hasToBeDeleted)
-        {
-            struct job_* jobToDelete = plist;
-            plist = plist->next;
-            delete_job(list, jobToDelete);
-        } else
-        {
-            plist = plist->next;
-        }
-    }
 }
 
 // -----------------------------------------------------------------------
@@ -94,21 +54,16 @@ void handler ()
 
 int main(void)
 {
-    list = new_list("Jobs");
-
     char inputBuffer[MAX_LINE]; /* buffer to hold the command entered */
     int background;             /* equals 1 if a command is followed by '&' */
     char *args[MAX_LINE/2];     /* command line (of 256) has max of 128 arguments */
-
     // probably useful variables:
-
     int pid_fork, pid_wait; /* pid for created and waited process */
     int status;             /* status returned by wait */
     enum status status_res; /* status processed by analyze_status() */
     int info;				/* info processed by analyze_status() */
 
     ignore_terminal_signals();
-    signal(SIGCHLD, handler);
 
     while (1)   /* Program terminates normally inside get_command() after ^D is typed*/
     {
