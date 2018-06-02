@@ -50,60 +50,69 @@ static void cd(char *args[])
 
 static void bg(char* args[])
 {
-    int num;
+    block_SIGCHLD();
+
+    int num = 1;
 
     if(list->next == NULL)
     {
         printf("ERROR, no processes suspended or in background.\n");
+    } else if(args[1] != NULL && (list_size(list) < atoi(args[1]) || 0 > atoi(args[1])))
+    {
+        printf("ERROR, the list has less processes than the needed ones.\n");
     } else
     {
         if(args[1] != NULL)
         {
             num = atoi(args[1]);
-        } else{
-            num = 1;
         }
 
         job* plist = get_item_bypos(list, num);
         plist->state = BACKGROUND;
         killpg(plist->pgid, SIGCONT);
     }
+    unblock_SIGCHLD();
 }
 
 static void fg(char* args[])
 {
-    int num, pid_wait, status;
+    block_SIGCHLD();
+
+    int num = 1, pid_wait, status;
 
     if(list->next == NULL)
     {
         printf("ERROR, no processes suspended or in background.\n");
-    } else
+    } else if (args[1] != NULL && (list_size(list) < atoi(args[1]) || 0 > atoi(args[1])))
     {
-        if(args[1] == NULL)
-        {
+        printf("ERROR, the list has less processes than the needed ones.\n");
+    }else
+    {
+        if(args[1] != NULL) {
             num = atoi(args[1]);
-        } else{
-            num = 1;
         }
 
         job* plist = get_item_bypos(list, num);
         set_terminal(plist->pgid);
         plist->state = FOREGROUND;
-        killpg(list->pgid, SIGCONT);
+        killpg(plist->pgid, SIGCONT);
         pid_wait = waitpid(plist->pgid, &status, WUNTRACED);
 
         if(pid_wait == plist->pgid)
         {
             printf("Process %s has finished.\n", plist->command);
-            delete_job(list, plist);
+            num = delete_job(list, plist);
         }
 
         set_terminal(getpid());
     }
+    unblock_SIGCHLD();
 }
 
 static void jobs()
 {
+    block_SIGCHLD();
+
     if(empty_list(list) != 1)
     {
         print_job_list(list);
@@ -111,44 +120,40 @@ static void jobs()
     {
         printf("The list is empty.\n");
     }
+    unblock_SIGCHLD();
 }
 
 static void handler ()
 {
     enum status status_res;
-    int exStat, info, hasToBeDeleted;
-    pid_t pid_aux;
-    job* plist = list->next;
+    int stat, info, pid_aux;
+    job *aux1, *aux2;
 
-    while(plist != NULL)
+    if(empty_list(list) != 1)
     {
-        hasToBeDeleted = 0;
-        pid_aux = waitpid(plist->pgid, &exStat, WNOHANG | WUNTRACED);
+        aux2 = list;
+        aux1 = aux2->next;
 
-        if(pid_aux == plist->pgid)
+        while(aux1 != NULL)
         {
-            status_res = analyze_status(exStat, &info);
+            pid_aux = waitpid(aux1->pgid, &stat, WNOHANG|WUNTRACED);
 
-            if(status_res != SUSPENDED)
+            if(pid_aux == aux1->pgid)
             {
-                hasToBeDeleted = 1;
-                printf("The process %d has finished successfully.\n", plist->pgid);
+                status_res = analyze_status(stat, &info);
+
+                if (status_res != SUSPENDED) {
+                    printf("The process %d has finished successfully.\n", aux1->pgid);
+                    delete_job(list, aux1);
+                } else {
+                    printf("The process %d is suspended.\n", aux1->pgid);
+                    aux1->state = STOPPED;
+                    aux1 = aux1->next;
+                }
             } else
             {
-                printf("The process %d is suspended.\n", plist->pgid);
-                plist->state = STOPPED;
+                aux1 = aux1->next;
             }
-
-        }
-
-        if(hasToBeDeleted)
-        {
-            struct job_* jobToDelete = plist;
-            plist = plist->next;
-            delete_job(list, jobToDelete);
-        } else
-        {
-            plist = plist->next;
         }
     }
 }
@@ -177,7 +182,7 @@ int main(void)
     while (1)   /* Program terminates normally inside get_command() after ^D is typed*/
     {
         signal(SIGCHLD, handler);
-        printf("COMMAND->");
+        printf("\nCOMMAND->");
         fflush(stdout);
         get_command(inputBuffer, MAX_LINE, args, &background);  /* get next command */
 
@@ -219,6 +224,7 @@ int main(void)
 
                restore_terminal_signals();
                execvp(args[0], args);
+               printf("Error, Command not found: %s\n",args[0]);
                exit(1);
            } else
            {
