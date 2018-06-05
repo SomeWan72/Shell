@@ -235,7 +235,7 @@ int main(void)
                    set_terminal(getpid());
 
                    if (info != 1) {
-                       printf("Foreground pid: %d, command: %s, %d, info: %d\n", pid_fork, args[0], status_res, info);
+                       printf("Foreground pid: %d, command: %s, %s, info: %d\n", pid_fork, args[0], status_strings[status_res], info);
                    }
 
                    if (status_res == SUSPENDED) {
